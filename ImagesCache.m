@@ -24,6 +24,10 @@
                       size:(CGSize)size
             forUIImageView:(UIImageView*)uiimageview
 {
+    //If retina detected then remake size to *2
+    //Если ретина экран тогда умножаем size на два
+    if([self isRetina])
+        size = CGSizeMake(size.width*2, size.height*2);
     //Create array with parts of URL separated by / symbol for get image name with extension
     //Создаем массив с частями URL разделенные знаком / для получения имени картинки с расширением
     NSArray *imageURLParts = [url componentsSeparatedByString:@"/"];
