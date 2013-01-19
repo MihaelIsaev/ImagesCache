@@ -1,9 +1,8 @@
 //
 //  ImagesCache.m
-//  Ulmart
 //
-//  Created by mihael on 19.01.13.
-//  Copyright (c) 2013 Mihael Isaev. All rights reserved.
+//  Created by Mihael Isaev on 19.01.13.
+//  Copyright (c) 2013 Mihael Isaev, Russia, Samara. All rights reserved.
 //
 
 #import "ImagesCache.h"
@@ -12,82 +11,212 @@
 
 -(id)init
 {
+    //Initialize nscache objects
+    //Инициализируем кэш-объекты
     imagesReal = [[NSCache alloc] init];
     imagesScaled = [[NSCache alloc] init];
     imagesScaledRetina = [[NSCache alloc] init];
     return self;
 }
 
--(UIImage*)imageWithArticul:(NSString*)articul
-                    toIndex:(int)index
+-(UIImage*)getImageWithURL:(NSString*)url
+                    prefix:(NSString*)prefix
+                      size:(CGSize)size
+            forUIImageView:(UIImageView*)uiimageview
 {
-    NSString *imageName = [NSString stringWithFormat:@"http://fast.ulmart.ru/good_big_pics/%@.jpg", articul];
-    NSCache *imagesCache = ([CommonHelper isRetina])?imagesBig2:imagesBig;
-    UIImage *image = [imagesCache objectForKey:imageName];
-    if (image)
+    //Create array with parts of URL separated by / symbol for get image name with extension
+    //Создаем массив с частями URL разделенные знаком / для получения имени картинки с расширением
+    NSArray *imageURLParts = [url componentsSeparatedByString:@"/"];
+    //Getting last object from imageURLParts with image name and extension separated by dot
+    //Получаем последний объект в массиве imageURLParts с именем и расширение картинки разделенные точкой
+    NSString *lastObjectInImageURLParts = [imageURLParts lastObject];
+    //Create array with parts of image name separated by . symbol for get name and extension
+    //Создаем массив с частями названия картинки разделенные знаком . для получения отдельно имени и расширения картинки
+    NSArray *imageNameParts = [lastObjectInImageURLParts componentsSeparatedByString:@"."];
+    //Create strings with image name and image extension
+    //Создаем строки содержащие название файла и расширение файла
+    NSString *imageName = [imageNameParts objectAtIndex:0];
+    NSString *imageExtension = [imageNameParts objectAtIndex:1];
+    //Create link to cache object by checking retina display or not
+    //Создаем ссылку на объект кэша выбирая нужный взависимости от того retina дисплей или нет
+    NSCache *cache = ([self isRetina]) ? imagesScaledRetina : imagesScaled;
+    //Create uiimage object
+    //Создаем объект uiimage
+    UIImage *image = [[UIImage alloc] init];
+    //Try to get image from cache by image name without extension
+    //Пробуем получить картинку из кэша по ее имени без расширения
+    image = [cache objectForKey:imageName];
+    //Check if image is exists in cache and return it
+    //Проверяем если картинка есть в кэше, тогда возвращаем ее
+    if(image)
         return image;
-    else
-    {
-        FXImageView *view = (FXImageView*)[_carousel itemViewAtIndex:index];//[imagesTableView viewAtIndex:index];
-        if (view)
-            view.image = [UIImage imageNamed:@"placeholder.png"];
-        // the get the image in the background
-        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-            // get the UIImage
-            UIImage *image = [imagesReal objectForKey:imageName];
-            CGSize imageSize = ([CommonHelper isRetina])?CGSizeMake(360, 360):CGSizeMake(180, 180);
-            if(!image)
-                image = [self getImageWithName:[self makeImageNameWithArticul:articul andType:ULItemsImageCacheReal] andExtension:@"jpg"];
-            if(!image) // if we not found it, then download it!
-                @try {
-                    image = [[UIImage alloc] initWithData:[NSData dataWithContentsOfURL:[NSURL URLWithString:imageName]]];
-                    [self saveImage:image toFileWithName:[self makeImageNameWithArticul:articul andType:ULItemsImageCacheReal] andExtension:@"jpg"];
-                }
+    //So let's try to open image from saved file on disk (if he is exists)
+    //Ну что ж пробуем открыть картинку из сохраненного файла на диске (если он существует)
+    image = [self getImageWithName:imageName type:ICTypeScaled extension:imageExtension];
+    //Check if image is exists on disk and return it
+    //Проверяем получили ли мы картинку с диска и возвращаем ее
+    if(image)
+        return image;
+    //So, we haven't image in cache and disk, and we need to download it from the network
+    //Что ж у нас нет картинки ни в кэше ни на диске, значит мы должны скачать ее из сети
+    //Before downloading setting in uiimage temporary placeholder.png image with loading text
+    //Перед скачиванием задаем в uiimage временную картинку placeholder.png с текстом loading
+    uiimageview.image = [UIImage imageNamed:ICPlaceholderFile];
+    //Create background thread for download and scale image without blocking our UI
+    //Создаем фоновый поток для скачивания и сжатия картинки не блокируя интерфейс нашей программы
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+        //Try to get real image from cache by image name without extension
+        //Пробуем получить оригинальную картинку из кэша по ее имени без расширения
+        UIImage *realImage = [imagesReal objectForKey:imageName];
+        //Check, and if real image is not exists in cache let's try to open real image from saved file on disk (if he is exists)
+        //Проверяем, если оригинальной картинки нет в кэше, тогда пытаемся открыть оригинальную картинку из сохраненного файла на диске (если он существует)
+        if(!realImage)
+            realImage = [self getImageWithName:imageName type:ICTypeReal extension:imageExtension];
+        //Check, if original image still not exists we start getting it from the network
+        //Проверяем, если оригинальной картинки все еще нет мы начинаем загрузку ее из сети
+        if(!realImage)
+            //We'll be careful and use try/catch for downloading
+            //Мы будем осторожны и используем try/catch при загрузке
+            @try {
+                //Making NSURL object with our url string
+                //Создаем NSURL объект с нашей строкой url
+                NSURL *nsurl = [NSURL URLWithString:url];
+                //Download file to NSData object with using nsurl
+                //Загружаем файл в NSData объект с использованием nsurl
+                NSData *nsdata = [NSData dataWithContentsOfURL:nsurl];
+                //Setting real image with getted nsdata
+                //Задаем оригинальную картинку с данными из nsdata
+                realImage = [[UIImage alloc] initWithData:nsdata];
+                //Save downloaded real image to file on disk
+                //Сохраняем загруженную оригинальную картинку в файл на диск
+                [self saveImage:image toFileWithName:[self makeNameWithPrefix:prefix name:imageName] type:ICTypeReal extension:imageExtension];
+            }
             @catch (NSException *exception) {
-                NSLog(@"Error download image: %@", imageName);
+                NSLog(@"Error downloading image with name: %@", imageName);
             }
-            if(image) // if we found it, then update UI and add it to cache
-            {
-                UIImage *scaledImage = [CommonHelper imageWithImage:image scaledToSize:imageSize];
-                [imagesReal setObject:image forKey:imageName];
-                if(imagesCache)
-                    [imagesCache setObject:scaledImage forKey:imageName];
-                dispatch_async(dispatch_get_main_queue(), ^{ // if the cell is visible, then set the image
-                    @try{
-                        FXImageView *view = (FXImageView*)[_carousel itemViewAtIndex:index];//[imagesTableView viewAtIndex:index];
-                        if (view)
-                            view.image = scaledImage;
-                    }
-                    @catch (NSException *exception) {
-                        NSLog(@"scale image exception: %@", exception);
-                    }
-                });
-            }
-        });
+        //Check if real image is exists
+        //Проверяем что оригинальная картинка теперь у нас есть
+        if(realImage)
+        {
+            //Save original image to imagesReal cache
+            //Сохраняем оригинальную картинку в кэш imagesReal
+            [imagesReal setObject:realImage forKey:imageName];
+            //Create scaled image object from real image
+            //Создаем объект со сжатой картинкой из оригинальной картинки
+            UIImage *scaledImage = [self scaleImage:realImage toSize:size];
+            //Save scaled image to scaled images cache
+            //Сохраняем сжатую картинку в кэш сжатых картинок
+            [cache setObject:scaledImage forKey:imageName];
+            //In main thread we set scaled image object to uiimage
+            //В главном потоке мы зададим сжатую картинку в uiimage
+            dispatch_async(dispatch_get_main_queue(), ^{
+                //We'll be careful and use try/catch
+                //Мы будем осторожны и используем try/catch
+                @try {
+                    //Check for uiimage is not released and set scaled image to it
+                    //Проверим не очистился ли еще объект uiimage и задаем в него сжатую картинку
+                    if(uiimageview)
+                        uiimageview.image = scaledImage;
+                }
+                @catch (NSException *exception) {
+                    NSLog(@"Error setting uiimage with name: %@", imageName);
+                }
+            });
+        }
+    });
+    //Return uiimage
+    //Возвращаем uiimage
+    return uiimageview.image;
+}
+
+//Helper function for make image filename
+//Вспомогательная функция для создания имени картинки
+-(NSString*)makeNameWithPrefix:(NSString*)prefix
+                          name:(NSString*)name
+{
+    return [NSString stringWithFormat:@"%@_%@", prefix, name];
+}
+
+//Helper function for detect retina screen
+//Вспомогательная функция для определения retina дисплея
+-(BOOL)isRetina
+{
+    if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad)
+    {
+        CGFloat scale = [[UIScreen mainScreen] scale];
+        if (scale > 1.0)
+            //iPad retina display
+            return YES;
+        else
+            //iPad not retina display
+            return NO;
     }
-    return [UIImage imageNamed:@"placeholder.png"];
+    else
+        if ([UIScreen instancesRespondToSelector:@selector(scale)])
+        {
+            CGFloat scale = [[UIScreen mainScreen] scale];
+            if (scale > 1.0)
+                if([[ UIScreen mainScreen ] bounds ].size.height == 568)
+                    //iphone 5 retina display
+                    return YES;
+                else
+                    //iphone retina display
+                    return YES;
+                else
+                    //iphone not retina display
+                    return NO;
+        }
+        else
+            //other not retina display
+            return NO;
 }
 
--(NSString*)makeImageNameWithArticul:(NSString*)articul
-                             andType:(NSString*)type
+//Helper function for resize image
+//Вспомогательная функция для изменения размера картинки
+-(UIImage*)scaleImage:(UIImage*)image
+               toSize:(CGSize)newSize
 {
-    return [NSString stringWithFormat:@"%@_%@", type, articul];
+    UIGraphicsBeginImageContext( newSize );
+    [image drawInRect:CGRectMake(0,0,newSize.width,newSize.height)];
+    UIImage* newImage = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return newImage;
 }
 
--(void)saveImage:(UIImage*)image toFileWithName:(NSString*)name andExtension:(NSString*)extension
+//Helper function for saving image to file on disk
+//Вспомогательная функция для сохранения картинки в файл на диск
+-(void)saveImage:(UIImage*)image
+  toFileWithName:(NSString*)name
+            type:(NSString*)type
+       extension:(NSString*)extension
 {
+    //String with link to directory with files
+    //Строка со ссылкой на папку с файлами
     NSString *directory = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) lastObject];
-    NSString *fileWithPathAndExtension = [directory stringByAppendingFormat:@"%@.%@", name, extension];
+    //String with link to file in folder
+    //Строка со ссылкой на файл в папке
+    NSString *fileWithPathAndExtension = [directory stringByAppendingFormat:@"%@_%@.%@", name, type, extension];
+    //Writing file to disk
+    //Запись файла на диск
     if([extension isEqualToString:@"png"])
         [UIImagePNGRepresentation(image) writeToFile:fileWithPathAndExtension atomically:YES];
     else
         [UIImageJPEGRepresentation(image, 1.0) writeToFile:fileWithPathAndExtension atomically:YES];
 }
 
-- (UIImage*)getImageWithName:(NSString*)name andExtension:(NSString*)extension
+
+//Helper function for getting image from file on disk
+//Вспомогательная функция для открытия картинки из файла на диске
+- (UIImage*)getImageWithName:(NSString*)name
+                        type:(NSString*)type
+                   extension:(NSString*)extension
 {
+    //String with link to directory with files
+    //Строка со ссылкой на папку с файлами
     NSString *directory = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) lastObject];
-    NSString *fileWithPathAndExtension = [directory stringByAppendingFormat:@"%@.%@", name, extension];
+    //String with link to file in folder
+    //Строка со ссылкой на файл в папке
+    NSString *fileWithPathAndExtension = [directory stringByAppendingFormat:@"%@_%@.%@", name, type, extension];
     return [UIImage imageWithContentsOfFile:fileWithPathAndExtension];
 }
 
