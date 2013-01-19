@@ -138,7 +138,8 @@
 -(NSString*)makeNameWithPrefix:(NSString*)prefix
                           name:(NSString*)name
 {
-    return [NSString stringWithFormat:@"%@_%@", prefix, name];
+    NSString *retina = ([self isRetina]) ? @"retina" : @"normal";
+    return [NSString stringWithFormat:@"%@_%@_%@", prefix, name, retina];
 }
 
 //Helper function for detect retina screen
