@@ -56,7 +56,7 @@
         return image;
     //So let's try to open image from saved file on disk (if he is exists)
     //Ну что ж пробуем открыть картинку из сохраненного файла на диске (если он существует)
-    image = [self getImageWithName:imageName type:ICTypeScaled extension:imageExtension];
+    image = [self getImageWithName:[self makeNameWithPrefix:prefix name:imageName] type:ICTypeScaled extension:imageExtension];
     //Check if image is exists on disk and return it
     //Проверяем получили ли мы картинку с диска и возвращаем ее
     if(image)
@@ -93,7 +93,7 @@
                 realImage = [[UIImage alloc] initWithData:nsdata];
                 //Save downloaded real image to file on disk
                 //Сохраняем загруженную оригинальную картинку в файл на диск
-                [self saveImage:image toFileWithName:[self makeNameWithPrefix:prefix name:imageName] type:ICTypeReal extension:imageExtension];
+                [self saveImage:realImage toFileWithName:[self makeNameWithPrefix:prefix name:imageName] type:ICTypeReal extension:imageExtension];
             }
             @catch (NSException *exception) {
                 NSLog(@"Error downloading image with name: %@", imageName);
@@ -111,6 +111,9 @@
             //Save scaled image to scaled images cache
             //Сохраняем сжатую картинку в кэш сжатых картинок
             [cache setObject:scaledImage forKey:imageName];
+            //Save scaled real image to file on disk
+            //Сохраняем сжатую оригинальную картинку в файл на диск
+            [self saveImage:scaledImage toFileWithName:[self makeNameWithPrefix:prefix name:imageName] type:ICTypeScaled extension:imageExtension];
             //In main thread we set scaled image object to uiimage
             //В главном потоке мы зададим сжатую картинку в uiimage
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -195,18 +198,20 @@
             type:(NSString*)type
        extension:(NSString*)extension
 {
+    if(!image)
+        NSLog(@"incoming image is nil");
     //String with link to directory with files
     //Строка со ссылкой на папку с файлами
-    NSString *directory = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) lastObject];
+    NSString *directory = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
     //String with link to file in folder
     //Строка со ссылкой на файл в папке
-    NSString *fileWithPathAndExtension = [directory stringByAppendingFormat:@"%@_%@.%@", name, type, extension];
+    NSString *fileWithPathAndExtension = [directory stringByAppendingFormat:@"/%@_%@.%@", name, type, extension];
+    //Create NSData object with image
+    //Создаем объект NSData с картинкой
+    NSData *data = ([extension isEqualToString:@"png"]) ? UIImagePNGRepresentation(image) : UIImageJPEGRepresentation(image, 1.0);
     //Writing file to disk
     //Запись файла на диск
-    if([extension isEqualToString:@"png"])
-        [UIImagePNGRepresentation(image) writeToFile:fileWithPathAndExtension atomically:YES];
-    else
-        [UIImageJPEGRepresentation(image, 1.0) writeToFile:fileWithPathAndExtension atomically:YES];
+    [data writeToFile:fileWithPathAndExtension atomically:YES];
 }
 
 
@@ -218,10 +223,10 @@
 {
     //String with link to directory with files
     //Строка со ссылкой на папку с файлами
-    NSString *directory = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) lastObject];
+    NSString *directory = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
     //String with link to file in folder
     //Строка со ссылкой на файл в папке
-    NSString *fileWithPathAndExtension = [directory stringByAppendingFormat:@"%@_%@.%@", name, type, extension];
+    NSString *fileWithPathAndExtension = [directory stringByAppendingFormat:@"/%@_%@.%@", name, type, extension];
     return [UIImage imageWithContentsOfFile:fileWithPathAndExtension];
 }
 
