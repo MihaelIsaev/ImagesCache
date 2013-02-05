@@ -84,6 +84,7 @@
             @try {
                 //Making NSURL object with our url string
                 //Создаем NSURL объект с нашей строкой url
+                NSLog(@"image url: %@", url);
                 NSURL *nsurl = [NSURL URLWithString:url];
                 //Download file to NSData object with using nsurl
                 //Загружаем файл в NSData объект с использованием nsurl
@@ -104,13 +105,15 @@
         {
             //Save original image to imagesReal cache
             //Сохраняем оригинальную картинку в кэш imagesReal
-            [imagesReal setObject:realImage forKey:imageName];
+            if(realImage)
+                [imagesReal setObject:realImage forKey:imageName];
             //Create scaled image object from real image
             //Создаем объект со сжатой картинкой из оригинальной картинки
             UIImage *scaledImage = [self scaleImage:realImage toSize:size];
             //Save scaled image to scaled images cache
             //Сохраняем сжатую картинку в кэш сжатых картинок
-            [cache setObject:scaledImage forKey:imageName];
+            if(scaledImage)
+                [cache setObject:scaledImage forKey:imageName];
             //Save scaled real image to file on disk
             //Сохраняем сжатую оригинальную картинку в файл на диск
             [self saveImage:scaledImage toFileWithName:[self makeNameWithPrefix:prefix name:imageName] type:ICTypeScaled extension:imageExtension];
@@ -122,7 +125,7 @@
                 @try {
                     //Check for uiimage is not released and set scaled image to it
                     //Проверим не очистился ли еще объект uiimage и задаем в него сжатую картинку
-                    if(uiimageview)
+                    if(uiimageview && scaledImage)
                         uiimageview.image = scaledImage;
                 }
                 @catch (NSException *exception) {
