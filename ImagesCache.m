@@ -7,6 +7,8 @@
 
 #import "ImagesCache.h"
 
+#define directoryInCache @"imagesCache"
+
 @implementation ImagesCache
 
 -(id)init
@@ -16,6 +18,7 @@
     imagesReal = [[NSCache alloc] init];
     imagesScaled = [[NSCache alloc] init];
     imagesScaledRetina = [[NSCache alloc] init];
+    [self createDirectory:directoryInCache atFilePath:[self cacheDirectory]];
     return self;
 }
 
@@ -39,7 +42,7 @@
     NSArray *imageNameParts = [lastObjectInImageURLParts componentsSeparatedByString:@"."];
     //Create strings with image name and image extension
     //Создаем строки содержащие название файла и расширение файла
-    NSString *imageName = [imageNameParts objectAtIndex:0];
+    NSString *imageName = [NSString stringWithFormat:@"%@_%@", prefix, [imageNameParts objectAtIndex:0]];
     NSString *imageExtension = [imageNameParts objectAtIndex:1];
     //Create link to cache object by checking retina display or not
     //Создаем ссылку на объект кэша выбирая нужный взависимости от того retina дисплей или нет
@@ -84,7 +87,7 @@
             @try {
                 //Making NSURL object with our url string
                 //Создаем NSURL объект с нашей строкой url
-                NSLog(@"image url: %@", url);
+                //NSLog(@"image url: %@", url);
                 NSURL *nsurl = [NSURL URLWithString:url];
                 //Download file to NSData object with using nsurl
                 //Загружаем файл в NSData объект с использованием nsurl
@@ -96,9 +99,9 @@
                 //Сохраняем загруженную оригинальную картинку в файл на диск
                 [self saveImage:realImage toFileWithName:[self makeNameWithPrefix:prefix name:imageName] type:ICTypeReal extension:imageExtension];
             }
-            @catch (NSException *exception) {
-                NSLog(@"Error downloading image with name: %@", imageName);
-            }
+        @catch (NSException *exception) {
+            NSLog(@"Error downloading image with name: %@", imageName);
+        }
         //Check if real image is exists
         //Проверяем что оригинальная картинка теперь у нас есть
         if(realImage)
@@ -202,13 +205,13 @@
        extension:(NSString*)extension
 {
     if(!image)
+    {
         NSLog(@"incoming image is nil");
-    //String with link to directory with files
-    //Строка со ссылкой на папку с файлами
-    NSString *directory = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
+        return;
+    }
     //String with link to file in folder
     //Строка со ссылкой на файл в папке
-    NSString *fileWithPathAndExtension = [directory stringByAppendingFormat:@"/%@_%@.%@", name, type, extension];
+    NSString *fileWithPathAndExtension = [[self cacheDirectory] stringByAppendingFormat:@"/%@/%@_%@.%@", directoryInCache, name, type, extension];
     //Create NSData object with image
     //Создаем объект NSData с картинкой
     NSData *data = ([extension isEqualToString:@"png"]) ? UIImagePNGRepresentation(image) : UIImageJPEGRepresentation(image, 1.0);
@@ -224,13 +227,30 @@
                         type:(NSString*)type
                    extension:(NSString*)extension
 {
-    //String with link to directory with files
-    //Строка со ссылкой на папку с файлами
-    NSString *directory = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
     //String with link to file in folder
     //Строка со ссылкой на файл в папке
-    NSString *fileWithPathAndExtension = [directory stringByAppendingFormat:@"/%@_%@.%@", name, type, extension];
+    NSString *fileWithPathAndExtension = [[self cacheDirectory] stringByAppendingFormat:@"/%@/%@_%@.%@", directoryInCache, name, type, extension];
     return [UIImage imageWithContentsOfFile:fileWithPathAndExtension];
+}
+
+-(NSString*)cacheDirectory
+{
+    NSString *cachePath = NSTemporaryDirectory();
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
+    if(paths.count>0)
+        cachePath = [paths objectAtIndex:0];
+    return cachePath;
+}
+
+-(void)createDirectory:(NSString *)directoryName atFilePath:(NSString *)filePath
+{
+    NSString *filePathAndDirectory = [filePath stringByAppendingPathComponent:directoryName];
+    NSError *error = nil;
+    if (![[NSFileManager defaultManager] createDirectoryAtPath:filePathAndDirectory
+                                   withIntermediateDirectories:NO
+                                                    attributes:nil
+                                                         error:&error])
+        NSLog(@"Create directory error: %@", error);
 }
 
 @end
